@@ -234,9 +234,12 @@ pytest -q
 
 ## 배포 URL
 
-- 프론트엔드: 배포 후 입력
-- 백엔드 API: 배포 후 입력
-- Swagger UI: 배포 후 입력
+- 프론트엔드: https://econscope-theta.vercel.app
+- 백엔드 API: https://econscope-api.onrender.com
+- Swagger UI: https://econscope-api.onrender.com/docs
+- 상태 확인: https://econscope-api.onrender.com/health
+
+백엔드는 Render 무료 인스턴스를 사용하므로 장시간 요청이 없으면 첫 접속에 약 50초 이상 걸릴 수 있습니다. 잠시 기다린 뒤 자동으로 이어서 사용하면 됩니다.
 
 ## 제출 스크린샷
 
