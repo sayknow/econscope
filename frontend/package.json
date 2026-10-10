@@ -1,0 +1,11 @@
+{
+  "name": "econscope-frontend",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs",
+    "dev": "python3 -m http.server 3000 -d public"
+  }
+}
+

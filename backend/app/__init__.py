@@ -1,0 +1,2 @@
+"""EconScope backend package."""
+
