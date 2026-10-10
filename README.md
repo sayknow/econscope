@@ -47,11 +47,11 @@ EconScope는 한국은행 ECOS의 원/달러 환율, 기준금리, 소비자물�
 - Python 3.10+
 - FastAPI / Pydantic
 - Firebase Admin SDK / Firestore
-- OpenAI Responses API
+- Google Gemini API(기본) / OpenAI Responses API(선택)
 - 한국은행 ECOS Open API
 - Render 배포 설정
 
-OpenAI 연동은 새로운 앱에 권장되는 Responses API를 사용합니다. `ENABLE_WEB_SEARCH=true`일 때 Responses API의 `web_search` 도구를 활성화하며, 검색 결과가 없거나 호출이 실패하면 저장 데이터와 일반 경제 원리로 답변합니다. 참고: [Responses API](https://developers.openai.com/api/reference/python/resources/responses/methods/create), [Web search](https://developers.openai.com/api/docs/guides/tools-web-search)
+기본 AI 제공자는 Gemini이며 `gemini-3.5-flash-lite`를 사용합니다. `ENABLE_WEB_SEARCH=true`이면 Gemini의 Google Search Grounding을 활성화하고, 검색 결과가 없거나 호출이 실패하면 저장 데이터와 일반 경제 원리로 답변합니다. `AI_PROVIDER=openai`로 변경하면 기존 OpenAI Responses API 경로도 사용할 수 있습니다. 참고: [Gemini 콘텐츠 생성](https://ai.google.dev/api/generate-content), [Google Search Grounding](https://ai.google.dev/gemini-api/docs/google-search)
 
 ## 프로젝트 구조
 
@@ -60,7 +60,7 @@ M1-2/
 ├── backend/
 │   ├── app/
 │   │   ├── routers/             # 데이터·대화·채팅 API
-│   │   ├── services/            # 분석·ECOS·OpenAI·대화 로직
+│   │   ├── services/            # 분석·ECOS·Gemini/OpenAI·대화 로직
 │   │   ├── config.py            # 환경 변수
 │   │   ├── models.py            # Pydantic 검증 모델
 │   │   ├── repository.py        # Firestore와 로컬 저장소
@@ -87,7 +87,7 @@ M1-2/
 cp .env.example .env
 ```
 
-Firestore나 OpenAI 키 없이 화면과 CRUD, 통계, 로컬 데이터 기반 채팅을 실행하려면 다음 값을 유지합니다.
+Firestore나 AI 키 없이 화면과 CRUD, 통계, 로컬 데이터 기반 채팅을 실행하려면 다음 값을 유지합니다.
 
 ```dotenv
 USE_LOCAL_DB=true
@@ -123,9 +123,12 @@ npm run dev
 
 | 변수 | 필수 | 설명 |
 |---|---|---|
-| `OPENAI_API_KEY` | 배포 시 권장 | OpenAI API 키. 없으면 로컬 분석 답변 사용 |
-| `OPENAI_MODEL` | 아니요 | 기본값 `gpt-4.1-mini` |
-| `ENABLE_WEB_SEARCH` | 아니요 | `true`이면 답변 생성 시 필요에 따라 외부 근거 검색 |
+| `AI_PROVIDER` | 아니요 | AI 제공자. 기본값 `gemini`, 선택값 `openai` |
+| `GEMINI_API_KEY` | Gemini 사용 시 | Gemini API 키. 없으면 로컬 분석 답변 사용 |
+| `GEMINI_MODEL` | 아니요 | 기본값 `gemini-3.5-flash-lite` |
+| `OPENAI_API_KEY` | OpenAI 사용 시 | 선택적 OpenAI API 키 |
+| `OPENAI_MODEL` | 아니요 | OpenAI 사용 시 기본값 `gpt-4.1-mini` |
+| `ENABLE_WEB_SEARCH` | 아니요 | `true`이면 Gemini Google Search 또는 OpenAI 웹 검색 활성화 |
 | `ECOS_API_KEY` | 배포 시 권장 | 한국은행 ECOS API 키. `sample`도 가능하지만 호출당 행 수 제한 |
 | `FIREBASE_SERVICE_ACCOUNT_JSON` | Firestore 사용 시 | 서비스 계정 JSON 전체 문자열 |
 | `FIREBASE_SERVICE_ACCOUNT_PATH` | 로컬 대안 | 서비스 계정 JSON 파일 경로 |
@@ -218,7 +221,7 @@ pytest -q
 
 1. GitHub 저장소를 Render에 연결합니다.
 2. 저장소 루트의 `render.yaml`을 사용하는 Blueprint를 생성합니다.
-3. `OPENAI_API_KEY`, `ECOS_API_KEY`, `FIREBASE_SERVICE_ACCOUNT_JSON`, `ALLOWED_ORIGINS`를 등록합니다.
+3. `AI_PROVIDER=gemini`, `GEMINI_API_KEY`, `ECOS_API_KEY`, `FIREBASE_SERVICE_ACCOUNT_JSON`, `ALLOWED_ORIGINS`를 등록합니다.
 4. 배포 후 `/health`와 `/docs`를 확인합니다.
 
 무료 인스턴스는 비활성 상태 이후 첫 요청이 느릴 수 있습니다. 프론트엔드는 응답이 2.5초 이상 걸리면 서버를 준비하고 있다는 안내를 표시합니다.

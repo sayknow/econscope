@@ -129,5 +129,4 @@ class ChatResponse(BaseModel):
     sources: list[SourceItem] = Field(default_factory=list)
     source_notice: str | None = None
     outlook: Outlook | None = None
-    generated_by: Literal["openai", "local-analysis"]
-
+    generated_by: Literal["gemini", "openai", "local-analysis"]

@@ -2,8 +2,11 @@ from __future__ import annotations
 
 import json
 import re
+import time
 from datetime import datetime
 from urllib.parse import urlparse
+
+import requests
 
 from ..config import Settings
 from ..models import ChatRequest, Outlook, OutlookScenario, SourceItem
@@ -16,6 +19,12 @@ SOURCE_FALLBACK_NOTICE = (
     "관련 외부 자료를 충분히 확인하지 못했습니다. 아래 설명은 현재 경제지표와 "
     "일반적인 경제 원리를 바탕으로 한 가능성입니다."
 )
+GEMINI_ENDPOINT = (
+    "https://generativelanguage.googleapis.com/v1beta/models/"
+    "{model}:generateContent"
+)
+RETRYABLE_STATUS_CODES = {429, 500, 502, 503, 504}
+RETRY_DELAYS = (0.8, 1.8)
 
 
 class ChatService:
@@ -294,6 +303,87 @@ class ChatService:
                     found[url] = self._source_from_url(source.get("title", ""), url)
         return list(found.values())[:6]
 
+    def _extract_gemini_sources(self, payload: dict) -> list[SourceItem]:
+        candidates = payload.get("candidates") or []
+        if not candidates:
+            return []
+        metadata = candidates[0].get("groundingMetadata") or {}
+        found: dict[str, SourceItem] = {}
+        for chunk in metadata.get("groundingChunks") or []:
+            web = chunk.get("web") or {}
+            url = web.get("uri")
+            if not url:
+                continue
+            found[url] = self._source_from_url(
+                web.get("title") or "Google 검색 근거", url
+            )
+        return list(found.values())[:6]
+
+    @staticmethod
+    def _instructions() -> str:
+        return (
+            "당신은 EconScope의 한국어 경제 선생님입니다. 경제 초보자에게 쉬운 말로 답하세요. "
+            "반드시 '결론', '근거 수치', '주의사항' 순서를 사용하고 분석 기간과 실제 수치를 "
+            "포함하세요. 데이터에서 관찰한 사실과 가능한 원인 가설을 구분하세요. 상관관계를 "
+            "인과로 단정하지 마세요. 정확한 미래 수치와 매수·매도 추천은 금지합니다. 미래 질문은 "
+            "상승·유지·하락 시나리오로 설명하세요. 외부 검색을 했다면 한국은행·통계청·기획재정부·"
+            "KDI 등 공식 기관을 우선하고 출처가 확인된 사건만 언급하세요. 영어 약어가 나오면 "
+            "한국어 뜻을 함께 쓰세요. 답변은 Markdown으로 작성하고 기본 답변은 600자 이내, "
+            "상세 요청은 1,300자 이내로 작성하세요."
+        )
+
+    def _gemini_answer(
+        self, request: ChatRequest, summary: dict, history: list[dict]
+    ) -> tuple[str, list[SourceItem]]:
+        body = {
+            "systemInstruction": {
+                "parts": [{"text": self._instructions()}],
+            },
+            "contents": [
+                {
+                    "role": "user",
+                    "parts": [{"text": self._prompt(request, summary, history)}],
+                }
+            ],
+            "generationConfig": {
+                "temperature": 0.25,
+                "maxOutputTokens": 1_000 if request.detailed else 650,
+            },
+        }
+        if self.settings.enable_web_search:
+            body["tools"] = [{"google_search": {}}]
+
+        url = GEMINI_ENDPOINT.format(model=self.settings.gemini_model)
+        response: requests.Response | None = None
+        for attempt in range(len(RETRY_DELAYS) + 1):
+            response = requests.post(
+                url,
+                headers={
+                    "Content-Type": "application/json",
+                    "x-goog-api-key": self.settings.gemini_api_key,
+                },
+                json=body,
+                timeout=35,
+            )
+            if response.status_code not in RETRYABLE_STATUS_CODES:
+                break
+            if attempt < len(RETRY_DELAYS):
+                time.sleep(RETRY_DELAYS[attempt])
+
+        if response is None:
+            raise RuntimeError("Gemini API did not return a response")
+        response.raise_for_status()
+        payload = response.json()
+        candidates = payload.get("candidates") or []
+        if not candidates:
+            block_reason = (payload.get("promptFeedback") or {}).get("blockReason")
+            raise RuntimeError(f"Gemini response has no candidates: {block_reason or 'unknown'}")
+        parts = (candidates[0].get("content") or {}).get("parts") or []
+        answer = "".join(part.get("text", "") for part in parts).strip()
+        if not answer:
+            raise RuntimeError("Gemini response text is empty")
+        return answer, self._extract_gemini_sources(payload)
+
     def _openai_answer(
         self, request: ChatRequest, summary: dict, history: list[dict]
     ) -> tuple[str, list[SourceItem]]:
@@ -301,18 +391,9 @@ class ChatService:
 
         client = OpenAI(api_key=self.settings.openai_api_key)
         tools = [{"type": "web_search"}] if self.settings.enable_web_search else []
-        instructions = (
-            "당신은 EconScope의 한국어 경제 선생님입니다. 경제 초보자에게 쉬운 말로 답하세요. "
-            "반드시 '결론', '근거 수치', '주의사항' 순서를 사용하고 분석 기간과 실제 수치를 "
-            "포함하세요. 데이터에서 관찰한 사실과 가능한 원인 가설을 구분하세요. 상관관계를 "
-            "인과로 단정하지 마세요. 정확한 미래 수치와 매수·매도 추천은 금지합니다. 미래 질문은 "
-            "상승·유지·하락 시나리오로 설명하세요. 외부 검색을 했다면 한국은행·통계청·기획재정부·"
-            "KDI 등 공식 기관을 우선하고 출처가 확인된 사건만 언급하세요. 답변은 Markdown으로 "
-            "작성하고 기본 답변은 600자 이내, 상세 요청은 1,300자 이내로 작성하세요."
-        )
         response = client.responses.create(
             model=self.settings.openai_model,
-            instructions=instructions,
+            instructions=self._instructions(),
             input=self._prompt(request, summary, history),
             tools=tools,
             max_output_tokens=1_000 if request.detailed else 650,
@@ -334,13 +415,27 @@ class ChatService:
         source_notice: str | None = None
         generated_by = "local-analysis"
 
-        if self.settings.openai_api_key and not self._is_investment_request(request.question):
+        provider = self.settings.ai_provider
+        provider_key = (
+            self.settings.gemini_api_key
+            if provider == "gemini"
+            else self.settings.openai_api_key
+        )
+        if (
+            provider in {"gemini", "openai"}
+            and provider_key
+            and not self._is_investment_request(request.question)
+        ):
             try:
-                answer, sources = self._openai_answer(request, summary, history)
-                generated_by = "openai"
+                if provider == "gemini":
+                    answer, sources = self._gemini_answer(request, summary, history)
+                else:
+                    answer, sources = self._openai_answer(request, summary, history)
+                generated_by = provider
                 if self.settings.enable_web_search and not sources:
                     source_notice = SOURCE_FALLBACK_NOTICE
-            except Exception:
+            except Exception as exc:
+                print(f"[chat] {provider} generation failed: {type(exc).__name__}")
                 answer = self._local_answer(request, summary, outlook)
                 source_notice = SOURCE_FALLBACK_NOTICE
         else:

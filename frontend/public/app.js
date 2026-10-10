@@ -288,7 +288,8 @@ function assistantExtras(metadata = {}, allowDetail = true) {
   const noticeHtml = metadata.source_notice ? `<div class="notice-card"><svg><use href="#icon-info"/></svg><span>${escapeHtml(metadata.source_notice)}</span></div>` : "";
   const outlook = metadata.outlook;
   const outlookHtml = outlook ? `<div class="outlook-card"><div class="outlook-top"><span class="outlook-chip">예상 방향 <strong>${escapeHtml(outlook.direction)}</strong></span><span class="outlook-chip">확신 수준 <strong>${escapeHtml(outlook.confidence)}</strong></span><span class="outlook-chip">기간 <strong>${outlook.months}개월</strong></span></div><p class="confidence-reason"><strong>왜 이런 수준인가요?</strong><br/>${escapeHtml(outlook.confidence_reason)}</p><div class="scenario-list">${outlook.scenarios.map((scenario) => `<details><summary>${escapeHtml(scenario.title)}</summary><p>${escapeHtml(scenario.content)}</p></details>`).join("")}</div></div>` : "";
-  const tools = allowDetail ? `<div class="message-tools"><button class="detail-button">자세히 분석</button><span class="status-badge ${metadata.generated_by === "openai" ? "official" : "user"}">${metadata.generated_by === "openai" ? "AI + 데이터" : "데이터 분석"}</span></div>` : "";
+  const aiProvider = metadata.generated_by === "gemini" ? "Gemini + 데이터" : metadata.generated_by === "openai" ? "OpenAI + 데이터" : "데이터 분석";
+  const tools = allowDetail ? `<div class="message-tools"><button class="detail-button">자세히 분석</button><span class="status-badge ${metadata.generated_by === "gemini" || metadata.generated_by === "openai" ? "official" : "user"}">${aiProvider}</span></div>` : "";
   return outlookHtml + sourceHtml + noticeHtml + tools;
 }
 

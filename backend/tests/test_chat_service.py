@@ -17,6 +17,9 @@ def build_chat() -> tuple[ChatService, ConversationService]:
     data_service.ensure_seed_data()
     conversations = ConversationService(repository)
     settings = Settings(
+        ai_provider="gemini",
+        gemini_api_key="",
+        gemini_model="gemini-3.5-flash-lite",
         openai_api_key="",
         openai_model="gpt-4.1-mini",
         enable_web_search=False,
@@ -58,3 +61,18 @@ def test_investment_recommendation_is_refused():
     assert "매수·매도" in result["answer"]
     assert "투자 조언이 아닙니다" in result["answer"]
 
+
+def test_chat_uses_configured_gemini_provider(monkeypatch):
+    service, _ = build_chat()
+    object.__setattr__(service.settings, "gemini_api_key", "test-key")
+
+    monkeypatch.setattr(
+        service,
+        "_gemini_answer",
+        lambda request, summary, history: ("## 결론\nGemini 테스트 답변", []),
+    )
+
+    result = service.chat(ChatRequest(question="최근 물가 흐름은?"))
+
+    assert result["generated_by"] == "gemini"
+    assert "Gemini 테스트 답변" in result["answer"]

@@ -29,6 +29,9 @@ def _origins(value: str | None) -> tuple[str, ...]:
 
 @dataclass(frozen=True)
 class Settings:
+    ai_provider: str
+    gemini_api_key: str
+    gemini_model: str
     openai_api_key: str
     openai_model: str
     enable_web_search: bool
@@ -58,6 +61,11 @@ class Settings:
 @lru_cache
 def get_settings() -> Settings:
     return Settings(
+        ai_provider=os.getenv("AI_PROVIDER", "gemini").strip().lower(),
+        gemini_api_key=os.getenv("GEMINI_API_KEY", "").strip(),
+        gemini_model=os.getenv(
+            "GEMINI_MODEL", "gemini-3.5-flash-lite"
+        ).strip(),
         openai_api_key=os.getenv("OPENAI_API_KEY", "").strip(),
         openai_model=os.getenv("OPENAI_MODEL", "gpt-4.1-mini").strip(),
         enable_web_search=_as_bool(os.getenv("ENABLE_WEB_SEARCH"), False),
@@ -73,4 +81,3 @@ def get_settings() -> Settings:
         auto_sync=_as_bool(os.getenv("AUTO_SYNC"), True),
         seed_csv=BACKEND_DIR / "data" / "economic_indicators_monthly.csv",
     )
-

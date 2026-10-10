@@ -547,13 +547,13 @@ M1-1 프로젝트에서 수집·분석한 한국은행 ECOS 데이터를 초기 
 - 백엔드: FastAPI
 - 프론트엔드: HTML, CSS, JavaScript만 사용
 - 데이터베이스: Firebase Firestore
-- AI: OpenAI API
+- AI: Google Gemini API(기본), OpenAI API(선택)
 - 경제 데이터: 한국은행 ECOS API
 - 백엔드 배포: Render
 - 프론트엔드 배포: Vercel
 - API 키와 서비스 계정 정보는 환경 변수로 관리한다.
 - CORS 허용 주소를 배포 환경에 맞게 제한한다.
-- OpenAI 호출 횟수와 출력 길이를 제한해 비용을 관리한다.
+- AI 호출 횟수와 출력 길이를 제한해 비용을 관리한다.
 - 단순 통계와 그래프 갱신은 AI를 호출하지 않는다.
 - 외부 자료 기능이 비용 또는 API 제약으로 불가능한 경우 데이터와 일반 경제 원리에 기반한 설명으로 안전하게 대체한다.
 
