@@ -7,4 +7,4 @@ __pycache__/
 backend/.local_data/
 frontend/dist/
 frontend/node_modules/
-
+firebase-debug.log
